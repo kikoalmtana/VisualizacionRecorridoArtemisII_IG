@@ -10,12 +10,20 @@ Para llevar a cabo este proyecto es necesario primero obtener los datos de posic
 
 Para ello se han utilizado fuentes oficiales de la NASA, más en concreto, del JPL la NASA (Jet Propulsion Laboratory), que serán citados debidamente en este documento.
 
+### Enlace a video de YouTube:
+
+https://youtu.be/o4KLVysi9nk
+
 ## Índice
 
 1. [Obtención y procesamiento de los datos](#obtención-y-procesamiento-de-los-datos)
 2. [Punto de partida inicial](#punto-inicial-de-partida)
-3. [Añadiendo a la Luna]()
-4. [Añadiendo a la nave Orión]()
+3. [Reloj universal para la simulación](#reloj-universal-para-la-simulación)
+4. [Interpolación de los datos](#interpolación-de-los-datos)
+5. [Añadiendo a la Luna](#añadiendo-a-la-luna)
+6. [Añadiendo a la nave Orión](#añadiendo-a-la-nave-orión)
+7. [Cambio de perspectiva](#cambio-de-perspectiva)
+8. [Referencias](#referencias)
 
 ## Obtención y procesamiento de los datos
 
@@ -493,3 +501,41 @@ function animationLoop() {
 Con esto conseguimos el siguiente resultado
 
 <img src="./readme_images/cambios-de-camara.gif" alt="Cambios de cámara" width="100%">
+
+## Referencias
+
+### Datos y assets
+
+- Enlace a los datos de la trayectoria de la nave Orión en la misión Artemis II
+
+    [PDS de la NASA](https://pds.nasa.gov/)
+
+- Enlace a los datos de la trayectoria de la Luna (extracción de los datos el dia 12/11/2026)
+
+    [JPL Horizonts](https://ssd.jpl.nasa.gov/horizons/app.html#/)
+
+- Enlace a textura de la Luna
+
+    [Solar System Scopes (Moon)](https://www.solarsystemscope.com/textures/)
+
+### Conversaciones con IA
+
+- Conversación para búsqueda de datos para el proyecto
+
+    [Claude](https://claude.ai/share/f886a83d-e823-45d6-a18f-4a8eec3638fd)
+
+    [Claude](https://claude.ai/share/5c0450f0-0065-4d19-837b-50ab26f4a9da)
+
+- Conversaciones para asistencia en el tratado de los datos extraidos
+
+    [Claude](https://claude.ai/share/e3983f47-6443-41b2-8e53-a0ed4645bc1e)
+
+    [ChatGPT](https://chatgpt.com/share/6af77f70-32f0-83ed-92e6-12b20a6cd18e)
+
+- Conversación para asistencia en la programación del reloj
+
+    [ChatGPT](https://chatgpt.com/share/6af77fb7-7d80-83eb-9190-96d248d3c767)
+
+- Conversación para asistencia en la programación de la interpolación de los datos
+
+    [ChatGPT](https://chatgpt.com/share/6af77f70-32f0-83ed-92e6-12b20a6cd18e)
