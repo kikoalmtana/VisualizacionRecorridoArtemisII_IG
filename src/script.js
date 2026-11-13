@@ -5,16 +5,23 @@ import GUI from "three/examples/jsm/libs/lil-gui.module.min.js";
 let scene;
 let camera;
 let renderer;
+let controls;
+
+const seguimiento = {
+    centro: "Tierra"
+};
+
+const objetivoCamara = new THREE.Vector3();
 
 let tierra;
 let ejeTierra;
 
-// Parametros físicos de la Tierra
+// Parametros fisicos de la Tierra
 const RADIO_TIERRA = 1;
 const INCLINACION_AXIAL = THREE.MathUtils.degToRad(23.44);
 const PERIODO_ROTACION = 86164;
 
-// Parámetros de la Luna
+// Parametros de la Luna
 let datosLuna;
 let luna;
 
@@ -23,6 +30,15 @@ const PERIODO_ROTACION_LUNA = 27.321661 * 24 * 60 * 60;
 async function cargarDatosLuna() {
     const respuesta = await fetch("./data/luna.json");
     datosLuna = await respuesta.json();
+}
+
+// Parametros de la nave Orion
+let datosOrion;
+let orion;
+
+async function cargarDatosOrion() {
+    const respuesta = await fetch("./data/orion.json");
+    datosOrion = await respuesta.json();
 }
 
 
@@ -54,14 +70,13 @@ function crearGUI() {
 
   // Posición centrada en la parte inferior
   gui.domElement.style.position = "fixed";
-  gui.domElement.style.top = "auto";
   gui.domElement.style.left = "50%";
   gui.domElement.style.bottom = "10px";
   gui.domElement.style.transform = "translateX(-50%)";
 
   // Anchura del panel
   gui.domElement.style.width = "400px";
-  gui.domElement.style.height = "180px";
+  gui.domElement.style.height = "210px";
   gui.domElement.style.maxWidth = "90vw";
   gui.domElement.style.boxSizing = "border-box";
 
@@ -73,6 +88,14 @@ function crearGUI() {
   // Control de velocidad
   gui.add(estado, "velocidad", -10000, 100000, 0.5)
     .name("Velocidad");
+
+  // Selector del centro de la simulación.
+  gui.add(seguimiento, "centro", {
+      "Tierra": "Tierra",
+      "Luna": "Luna",
+      "Orion": "Orion"
+  })
+  .name("Centrar simulación");
 
   // Botón reproducir / pausar
   const acciones = {
@@ -97,6 +120,33 @@ function crearGUI() {
     .listen()
     .disable();
 
+}
+
+function actualizarCentroCamara() {
+
+  let objeto;
+
+  switch (seguimiento.centro) {
+      case "Tierra":
+          objeto = tierra;
+          break;
+
+      case "Luna":
+          objeto = luna;
+          break;
+
+      case "Orion":
+          objeto = orion;
+          break;
+  }
+
+  objeto.getWorldPosition(objetivoCamara);
+
+  const desplazamiento = objetivoCamara.clone().sub(controls.target);
+  camera.position.add(desplazamiento);
+  controls.target.copy(objetivoCamara);
+
+  controls.update();
 }
 
 function actualizarGUI() {
@@ -181,24 +231,11 @@ function interpolarPosicion(datos, tiempo) {
 }
 
 init();
-animationLoop();
 
 async function init() {
 
   await cargarDatosLuna();
-
-  var info = document.createElement("div");
-  info.style.position = "absolute";
-  info.style.top = "30px";
-  info.style.width = "100%";
-  info.style.textAlign = "center";
-  info.style.color = "#fff";
-  info.style.fontWeight = "bold";
-  info.style.backgroundColor = "transparent";
-  info.style.zIndex = "1";
-  info.style.fontFamily = "Monospace";
-  info.innerHTML = "Visualización recorrido Artemis II";
-  document.body.appendChild(info);
+  await cargarDatosOrion();
 
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(
@@ -222,11 +259,13 @@ async function init() {
   //Objetos
   Tierra(RADIO_TIERRA, "./assets/earthmap1k.jpg");
   Luna(scene, datosLuna, "./assets/2k_moon.jpg");
+  Orion(scene, datosOrion);
 
-  var controls = new OrbitControls(camera, renderer.domElement);
+  controls = new OrbitControls(camera, renderer.domElement);
   controls.minDistance = RADIO_TIERRA * 1.2;
 
   crearGUI();
+  animationLoop();
 }
 
 function Tierra(radio, rutaTextura) {
@@ -279,6 +318,37 @@ function Luna(scene, datos, texturaLuna) {
     luna.position.copy(interpolarPosicion(datos, 0));
 }
 
+function Orion(scene, datos) {
+
+    const geometria = new THREE.SphereGeometry(0.05, 16, 16);
+    const material = new THREE.MeshPhongMaterial({
+        color: 0xffffff,
+        shininess: 30
+    });
+
+    orion = new THREE.Mesh(geometria, material);
+    scene.add(orion);
+
+    // Situar inicialmente Orion.
+    orion.position.copy(interpolarPosicion(datos, 0));
+
+    // Crear la trayectoria orbital.
+    const puntos = datos.pos.map(pos =>
+        new THREE.Vector3(...pos)
+    );
+
+    const geometriaOrbita = new THREE.BufferGeometry().setFromPoints(puntos);
+    const materialOrbita = new THREE.LineBasicMaterial({
+        color: 0xff0000
+    });
+    const orbita = new THREE.Line(
+        geometriaOrbita,
+        materialOrbita
+    );
+
+    scene.add(orbita);
+}
+
 function animationLoop() {
 
   requestAnimationFrame(animationLoop);
@@ -305,9 +375,12 @@ function animationLoop() {
   tierra.rotation.y = (2 * Math.PI / PERIODO_ROTACION) * estado.t;
   luna.rotation.y = (2 * Math.PI / PERIODO_ROTACION_LUNA) * estado.t;
 
+  // interpolación de posiciones de la Luna y de la nave Orion
   luna.position.copy(interpolarPosicion(datosLuna, estado.t));
+  orion.position.copy(interpolarPosicion(datosOrion, estado.t));
 
   actualizarGUI();
+  actualizarCentroCamara();
 
   renderer.render(scene, camera);
 }

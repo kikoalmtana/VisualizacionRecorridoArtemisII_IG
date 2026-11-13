@@ -30,12 +30,12 @@ Los datos utilizados se encuentran en el [este enlace](https://naif.jpl.nasa.gov
 Este fichero se ha tratado con un script de Python, [oem_a_json.py](./scripts/oem_a_json.py), que se encuentra en este repositorio en el directorio /scripts, el cual se ejecuta en una terminal de la siguiente forma:
 
 ```bash
->  python oem_a_json.py EM2_FODNAVBET_revF_PUBLIC.oem -o orion.json --step 10
+>  python oem_a_json.py EM2_FODNAVBET_revF_PUBLIC.oem -o Orión.json --step 10
 ```
 
 Se indica el fichero a procesar (se descargó y se incluyó al proyecto previamente) y devuelve un fichero json con todos los datos, se incluye un aprámetro step para suavizar el tamaño de este fichero js
 
-El fichero resultante, [orion.json](./src/data/orion.json) se encuentra dentro del directorio /src/data en el proyecto
+El fichero resultante, [Orión.json](./src/data/Orión.json) se encuentra dentro del directorio /src/data en el proyecto
 
 ### Datos relativos a la posición de la Luna respecto a la tierra
 
@@ -57,9 +57,9 @@ Este fichero contiene información general sobre la Luna, en su cabecera y poste
 JDUT, Calendar Date (UT), X, Y, Z,
 ```
 
-A diferencia del formato de los datos con el que venia la trayectoria de la nave Orion, Horizonts devuelve la posición relativa de la Luna a la tierra en el marco Eclíptico J2000 (el sistema de coordenadas celestes de referencia estándar en astronomía), por lo que será necesario pasar estas coordenadas al sistema de referencia EME2000 (un sistema de referencia ecuatorial cuyo plano XY coincide con el ecuador terrestre medio en la época J2000), que posteriormente escalaremos y adaptaremos al sistema de referencia de three.js
+A diferencia del formato de los datos con el que venia la trayectoria de la nave Orión, Horizonts devuelve la posición relativa de la Luna a la tierra en el marco Eclíptico J2000 (el sistema de coordenadas celestes de referencia estándar en astronomía), por lo que será necesario pasar estas coordenadas al sistema de referencia EME2000 (un sistema de referencia ecuatorial cuyo plano XY coincide con el ecuador terrestre medio en la época J2000), que posteriormente escalaremos y adaptaremos al sistema de referencia de three.js
 
-Para ello será necesario aplicar un ángulo de rotación alrededor del eje X de 23.4392911º, por lo que se ha añadido al proyecto un scrpit de Python [horizonts_a_json.py](./scripts/horizons_a_json.py) que se encarga de tomar este fichero y devolver un archivo json con todos los datos de la Luna, usando el mismo formato que orion.json, el cual se ejecuta con el siguiente comando en una terminal en el directorio del proyecto:
+Para ello será necesario aplicar un ángulo de rotación alrededor del eje X de 23.4392911º, por lo que se ha añadido al proyecto un scrpit de Python [horizonts_a_json.py](./scripts/horizons_a_json.py) que se encarga de tomar este fichero y devolver un archivo json con todos los datos de la Luna, usando el mismo formato que Orión.json, el cual se ejecuta con el siguiente comando en una terminal en el directorio del proyecto:
 
 ```bash
 > python horizons_a_json.py horizons_results.txt -o luna.json
@@ -341,3 +341,155 @@ De esta forma se implementa la trayectoria que recorrió la Luna los días de la
 
 <img src="./readme_images/luna-orbitando.gif" alt="La Luna siguiendo su trayectoria interpolada" width="100%">
 
+## Añadiendo a la nave Orión
+
+Para añadir la trayectoria de la nave Orión replicaremos lo que hicimos para añadir la trayectoria de la Luna, con la única diferencia de que usarmeos los datos del fichero orion.json.
+
+Lo primero es crear una función, como Luna(), que cree un objeto en la escena y dibuje la trayectoria en la escena:
+
+```js
+function Orion(scene, datos) {
+
+    const geometria = new THREE.SphereGeometry(0.05, 16, 16);
+    const material = new THREE.MeshPhongMaterial({
+        color: 0xffffff,
+        shininess: 30
+    });
+
+    orion = new THREE.Mesh(geometria, material);
+    scene.add(orion);
+
+    // Situar inicialmente Orion.
+    orion.position.copy(interpolarPosicion(datos, 0));
+
+    // Crear la trayectoria orbital.
+    const puntos = datos.pos.map(pos =>
+        new THREE.Vector3(...pos)
+    );
+
+    const geometriaOrbita = new THREE.BufferGeometry().setFromPoints(puntos);
+    const materialOrbita = new THREE.LineBasicMaterial({
+        color: 0xff0000
+    });
+    const orbita = new THREE.Line(
+        geometriaOrbita,
+        materialOrbita
+    );
+
+    scene.add(orbita);
+}
+```
+
+Y posteriormente añadimos las variables necesarias, llamamos al método Orion() en init() y añadimos la actualziación de la posición del objeto en animationLoop()
+
+```js
+// Parametros de la nave Orion
+let datosOrion;
+let orion;
+
+async function cargarDatosOrion() {
+    const respuesta = await fetch("./data/orion.json");
+    datosOrion = await respuesta.json();
+}
+
+...
+
+async function init() {
+
+  await cargarDatosLuna();
+  await cargarDatosOrion();
+
+  ...
+
+  //Objetos
+  Tierra(RADIO_TIERRA, "./assets/earthmap1k.jpg");
+  Luna(scene, datosLuna, "./assets/2k_moon.jpg");
+  Orion(scene, datosOrion);
+
+  var controls = new OrbitControls(camera, renderer.domElement);
+  controls.minDistance = RADIO_TIERRA * 1.2;
+
+  crearGUI();
+}
+
+...
+
+
+function animationLoop() {
+
+...
+
+  // interpolación de posiciones de la Luna y de la nave Orion
+  luna.position.copy(interpolarPosicion(datosLuna, estado.t));
+  orion.position.copy(interpolarPosicion(datosOrion, estado.t));
+
+  actualizarGUI();
+
+  renderer.render(scene, camera);
+}
+```
+
+Con esto ya habríamos implementado la trayectoria de la nave Orión y tendríamos una simulación de la trayectoria realizada hasta la Luna y la vuelta a la tierra
+
+<img src="./readme_images/trayectoria-orion.gif" alt="La nave Orión siguiendo su trayectoria interpolada" width="100%">
+
+## Cambio de perspectiva
+
+Por último, se añade la posibilidad que desde los controles de la simulación, se pueda cargar el centro de observación, entre la Tierra, la Luna y la nave Orión, para ello debemos declarar los controles orbitales como una variable, modificar la función crearGUI para añadir un desplegable y crear una función que gestione el cambio de cámara
+
+```js
+let controls;
+
+const seguimiento = {
+    centro: "Tierra"
+};
+
+const objetivoCamara = new THREE.Vector3();
+
+...
+
+function actualizarCentroCamara() {
+
+  let objeto;
+
+  switch (seguimiento.centro) {
+      case "Tierra":
+          objeto = tierra;
+          break;
+
+      case "Luna":
+          objeto = luna;
+          break;
+
+      case "Orion":
+          objeto = orion;
+          break;
+  }
+
+  objeto.getWorldPosition(objetivoCamara);
+
+  const desplazamiento = objetivoCamara.clone().sub(controls.target);
+  camera.position.add(desplazamiento);
+  controls.target.copy(objetivoCamara);
+
+  controls.update();
+}
+```
+
+La función actualizarCentroCamara se encarga de que siempre la simulación se encuentre centrada en el objeto seleccionado por el desplegable. A esta función se le llama al final de animationLoop
+
+```js
+function animationLoop() {
+
+...
+
+  actualizarGUI();
+  actualizarCentroCamara();
+
+  renderer.render(scene, camera);
+}
+```
+
+Con esto conseguimos el siguiente resultado
+
+<img src="./readme_images/cambios-de-camara.gif" alt="Cambios de cámara" width="100%">
