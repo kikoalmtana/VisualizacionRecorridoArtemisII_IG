@@ -175,7 +175,70 @@ El resultado, por ahora, es un reloj manipulable con el que podemos hacer girar 
 
 <img src="./readme_images/reloj.gif" alt="La tierra girando por el reloj" width="100%">
 
-## Incluyendo a la Luna en la simulación
+## Interpolación de los datos 
 
+Dado que no tenemos los datos de ambas trayectorias para cada segundo de simulación, vamos a tener que interpolar las posiciones intermedias entre instantes de tiempo para poder simular con precisión, para ello y dado que las trayectorias de la Luna y la nave Orión están en el mismo formato, vamos a crear una función universal que nos permita interpolar una posición para un instante de tiempo:
+
+```js
+
+function interpolarPosicion(datos, tiempo) {
+    const tiempos = datos.t;
+    const posiciones = datos.pos;
+
+    // Comprobar que existen muestras.
+    if (!tiempos.length || tiempos.length !== posiciones.length) {
+        throw new Error("Los datos de trayectoria no son válidos");
+    }
+
+    // Si el tiempo está fuera del intervalo, devolver el extremo más cercano.
+    if (tiempo <= tiempos[0]) {
+        return new THREE.Vector3(...posiciones[0]);
+    }
+
+    const ultimo = tiempos.length - 1;
+
+    if (tiempo >= tiempos[ultimo]) {
+        return new THREE.Vector3(...posiciones[ultimo]);
+    }
+
+    // Búsqueda binaria: encontrar las dos muestras que rodean tiempo.
+    let izquierda = 0;
+    let derecha = ultimo;
+
+    while (izquierda < derecha - 1) {
+        const medio = Math.floor((izquierda + derecha) / 2);
+
+        if (tiempos[medio] <= tiempo) {
+            izquierda = medio;
+        } else {
+            derecha = medio;
+        }
+    }
+
+    // Calcular cuánto hemos avanzado entre ambas muestras.
+    const t0 = tiempos[izquierda];
+    const t1 = tiempos[derecha];
+
+    const proporcion = (tiempo - t0) / (t1 - t0);
+
+    // Interpolar linealmente las coordenadas.
+    const posicion = new THREE.Vector3();
+
+    posicion.lerpVectors(
+        new THREE.Vector3(...posiciones[izquierda]),
+        new THREE.Vector3(...posiciones[derecha]),
+        proporcion
+    );
+
+    return posicion;
+}
+
+```
+
+Esta función realiza una búsqueda binaria en el fichero para buscar las dos muestras que se encuentran entre un intervalo de tiempo, calcula la diferencia temporal entre las posiciones e interpola la posición del objeto, y devuelve la posición interpolada en XYZ.
+
+Con esta función ya podemos comenzar a añadir la trayectorias.
+
+## Añadiendo a la Luna
 
 

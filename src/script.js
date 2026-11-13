@@ -14,6 +14,18 @@ const RADIO_TIERRA = 1;
 const INCLINACION_AXIAL = THREE.MathUtils.degToRad(23.44);
 const PERIODO_ROTACION = 86164;
 
+// Parámetros de la Luna
+let datosLuna;
+let luna;
+
+const PERIODO_ROTACION_LUNA = 27.321661 * 24 * 60 * 60;
+
+async function cargarDatosLuna() {
+    const respuesta = await fetch("./data/luna.json");
+    datosLuna = await respuesta.json();
+}
+
+
 // Parametros del reloj UTC
 const reloj = new THREE.Clock();
 
@@ -117,10 +129,64 @@ function actualizarGUI() {
 
 }
 
+function interpolarPosicion(datos, tiempo) {
+    const tiempos = datos.t;
+    const posiciones = datos.pos;
+
+    // Comprobar que existen muestras.
+    if (!tiempos.length || tiempos.length !== posiciones.length) {
+        throw new Error("Los datos de trayectoria no son válidos");
+    }
+
+    // Si el tiempo está fuera del intervalo, devolver el extremo más cercano.
+    if (tiempo <= tiempos[0]) {
+        return new THREE.Vector3(...posiciones[0]);
+    }
+
+    const ultimo = tiempos.length - 1;
+
+    if (tiempo >= tiempos[ultimo]) {
+        return new THREE.Vector3(...posiciones[ultimo]);
+    }
+
+    let izquierda = 0;
+    let derecha = ultimo;
+
+    while (izquierda < derecha - 1) {
+        const medio = Math.floor((izquierda + derecha) / 2);
+
+        if (tiempos[medio] <= tiempo) {
+            izquierda = medio;
+        } else {
+            derecha = medio;
+        }
+    }
+
+    // Calcular cuánto hemos avanzado entre ambas muestras.
+    const t0 = tiempos[izquierda];
+    const t1 = tiempos[derecha];
+
+    const proporcion = (tiempo - t0) / (t1 - t0);
+
+    // Interpolar linealmente las coordenadas.
+    const posicion = new THREE.Vector3();
+
+    posicion.lerpVectors(
+        new THREE.Vector3(...posiciones[izquierda]),
+        new THREE.Vector3(...posiciones[derecha]),
+        proporcion
+    );
+
+    return posicion;
+}
+
 init();
 animationLoop();
 
-function init() {
+async function init() {
+
+  await cargarDatosLuna();
+
   var info = document.createElement("div");
   info.style.position = "absolute";
   info.style.top = "30px";
@@ -141,7 +207,7 @@ function init() {
     0.1,
     1000
   );
-  camera.position.set(0, 1, 4);
+  camera.position.set(0, 15, 100);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -155,6 +221,7 @@ function init() {
 
   //Objetos
   Tierra(RADIO_TIERRA, "./assets/earthmap1k.jpg");
+  Luna(scene, datosLuna, "./assets/2k_moon.jpg");
 
   var controls = new OrbitControls(camera, renderer.domElement);
   controls.minDistance = RADIO_TIERRA * 1.2;
@@ -180,6 +247,38 @@ function Tierra(radio, rutaTextura) {
   scene.add(ejeTierra);
 }
 
+function Luna(scene, datos, texturaLuna) {
+
+    const textura = new THREE.TextureLoader().load(texturaLuna);
+    textura.colorSpace = THREE.SRGBColorSpace;
+
+    const geometria = new THREE.SphereGeometry(datos.luna_radio, 64, 64);
+    const material = new THREE.MeshPhongMaterial({
+        map: textura,
+        shininess: 5
+    });
+
+    luna = new THREE.Mesh(geometria, material);
+    scene.add(luna);
+
+
+    // Crear los puntos de la trayectoria orbital.
+    const puntos = datos.pos.map(pos =>
+        new THREE.Vector3(...pos)
+    );
+
+    // Crear la geometría de la trayectoria.
+    const geometriaOrbita = new THREE.BufferGeometry().setFromPoints(puntos);
+    const materialOrbita = new THREE.LineBasicMaterial({color: 0xaaaaaa});
+    const orbita = new THREE.Line(
+        geometriaOrbita,
+        materialOrbita
+    );
+
+    scene.add(orbita);
+    luna.position.copy(interpolarPosicion(datos, 0));
+}
+
 function animationLoop() {
 
   requestAnimationFrame(animationLoop);
@@ -202,9 +301,11 @@ function animationLoop() {
     }
   }
 
-  // Rotación terrestre según el tiempo absoluto
-  tierra.rotation.y =
-    (2 * Math.PI / PERIODO_ROTACION) * estado.t;
+  // Rotacion de la Tierra y de la Luna
+  tierra.rotation.y = (2 * Math.PI / PERIODO_ROTACION) * estado.t;
+  luna.rotation.y = (2 * Math.PI / PERIODO_ROTACION_LUNA) * estado.t;
+
+  luna.position.copy(interpolarPosicion(datosLuna, estado.t));
 
   actualizarGUI();
 
