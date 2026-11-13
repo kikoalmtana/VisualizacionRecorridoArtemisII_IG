@@ -241,4 +241,103 @@ Con esta función ya podemos comenzar a añadir la trayectorias.
 
 ## Añadiendo a la Luna
 
+Para implementar la luna, primero se ha importado el fichero luna.json y se han declarado variables para la Luna:
+
+```js
+// Parámetros de la Luna
+let datosLuna;
+let luna;
+
+const PERIODO_ROTACION_LUNA = 27.321661 * 24 * 60 * 60;
+
+async function cargarDatosLuna() {
+    const respuesta = await fetch("./data/luna.json");
+    datosLuna = await respuesta.json();
+}
+
+```
+
+Posteriormente se ha añadido en el script una función "Luna" que crea el objeto en la escena y lo inicializa en la primera posición que marcan el fichero con su registro de posiciones:
+
+```js
+function Luna(scene, datos, texturaLuna) {
+
+    const textura = new THREE.TextureLoader().load(texturaLuna);
+    textura.colorSpace = THREE.SRGBColorSpace;
+
+    const geometria = new THREE.SphereGeometry(datos.luna_radio, 64, 64);
+    const material = new THREE.MeshPhongMaterial({
+        map: textura,
+        shininess: 5
+    });
+
+    luna = new THREE.Mesh(geometria, material);
+    scene.add(luna);
+
+
+    // Crear los puntos de la trayectoria orbital.
+    const puntos = datos.pos.map(pos =>
+        new THREE.Vector3(...pos)
+    );
+
+    // Crear la geometría de la trayectoria.
+    const geometriaOrbita = new THREE.BufferGeometry().setFromPoints(puntos);
+    const materialOrbita = new THREE.LineBasicMaterial({color: 0xaaaaaa});
+    const orbita = new THREE.Line(
+        geometriaOrbita,
+        materialOrbita
+    );
+
+    scene.add(orbita);
+    luna.position.copy(interpolarPosicion(datos, 0));
+}
+```
+
+Esta función además crea la órbita de la Luna (sólamente la trayectoria que sigue la luna, no la órbita completa de la Luna) y por último se modificó la función init para que esperase a la carga de los datos del fichero y llamase a la función Luna.
+
+Además se modificó animationLoop para que actualizase en base al tiempo la posición de la Luna respecto a la tierra y para que la Luna girase sobre su propio eje:
+
+```js
+async function init() {
+
+  await cargarDatosLuna();
+
+ ...
+
+  camera.position.set(0, 15, 100);
+
+...
+
+  //Objetos
+  Tierra(RADIO_TIERRA, "./assets/earthmap1k.jpg");
+  Luna(scene, datosLuna, "./assets/2k_moon.jpg");
+
+  var controls = new OrbitControls(camera, renderer.domElement);
+  controls.minDistance = RADIO_TIERRA * 1.2;
+
+  crearGUI();
+}
+
+...
+
+function animationLoop() {
+
+...
+
+  // Rotacion de la Tierra y de la Luna
+  tierra.rotation.y = (2 * Math.PI / PERIODO_ROTACION) * estado.t;
+  luna.rotation.y = (2 * Math.PI / PERIODO_ROTACION_LUNA) * estado.t;
+
+    // actualzia la posición de la Luna interpolando la posición
+  luna.position.copy(interpolarPosicion(datosLuna, estado.t));
+
+  actualizarGUI();
+
+  renderer.render(scene, camera);
+}
+```
+
+De esta forma se implementa la trayectoria que recorrió la Luna los días de la misión Artemis II
+
+<img src="./readme_images/luna-orbitando.gif" alt="La Luna siguiendo su trayectoria interpolada" width="100%">
 
