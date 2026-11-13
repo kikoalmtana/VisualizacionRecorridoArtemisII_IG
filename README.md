@@ -57,11 +57,125 @@ Este fichero contiene información general sobre la Luna, en su cabecera y poste
 JDUT, Calendar Date (UT), X, Y, Z,
 ```
 
-Nos interesan los 4 ultimos campos, que representan el instente de tiempo en UT en el que la Luna estaba en una posición (X,Y,Z) concreta respecto de la tierra
+A diferencia del formato de los datos con el que venia la trayectoria de la nave Orion, Horizonts devuelve la posición relativa de la Luna a la tierra en el marco Eclíptico J2000 (el sistema de coordenadas celestes de referencia estándar en astronomía), por lo que será necesario pasar estas coordenadas al sistema de referencia EME2000 (un sistema de referencia ecuatorial cuyo plano XY coincide con el ecuador terrestre medio en la época J2000), que posteriormente escalaremos y adaptaremos al sistema de referencia de three.js
+
+Para ello será necesario aplicar un ángulo de rotación alrededor del eje X de 23.4392911º, por lo que se ha añadido al proyecto un scrpit de Python [horizonts_a_json.py](./scripts/horizons_a_json.py) que se encarga de tomar este fichero y devolver un archivo json con todos los datos de la Luna, usando el mismo formato que orion.json, el cual se ejecuta con el siguiente comando en una terminal en el directorio del proyecto:
+
+```bash
+> python horizons_a_json.py horizons_results.txt -o luna.json
+```
+
+Dando como resultado el fichero luna.json.
 
 ## Punto inicial de partida
 
 Vamos a partir de una escena sencilla donde tenemos en un espacio a la Tierra que recibe una ligera iluminación "simlando al sol" y con una pequeña luz ambiente para que la escena no sea totalmente oscura, reciclando una de las texturas del proyecto de partida de la práctica 8
 
 <img src="./readme_images/tierra.gif" alt="La tierra" width="100%">
+
+## Reloj universal para la simulación
+
+El primer paso que debemos dar para la simulación, es añadir un reloj que orqueste el movimiento de la tierra, de la nave Orión y de la Luna, de forma que todos ellos vayan al mismo compás, este reloj debe marcar la fecha y la hora en cada momento, y además sería ideal poder desplazarse en el tiempo y acelerar o decelerar la velocidad de la simulación.
+
+Para ello se añaden las siguientes variables y se importa el módulo GUI.
+
+```js
+const reloj = new THREE.Clock();
+
+const INICIO_MISION = Date.UTC(2026, 3, 2, 1, 58, 0);
+const FIN_MISION = Date.UTC(2026, 3, 10, 23, 53, 0);
+
+const DURACION_MISION = (FIN_MISION - INICIO_MISION) / 1000;
+
+const estado = {
+  t: 0,
+  reproduciendo: false,
+  velocidad: 1
+};
+
+let gui;
+let botonPlay;
+
+const informacion = {
+  fechaUTC: "",
+  tiempoMision: ""
+};
+```
+
+Definimos los instantes de inicio y fin de la misión Artemis II y tenemos dos constantes relativas al estado de la misión, las variables estado e información, las cuales como tal son las que definen este reloj, y para poder actualizarlo en función a la velocidad de la simulación o manualmente, se crea una interfaz de usuario y se añade la siguiente función
+
+```js
+function actualizarGUI() {
+
+  const fecha = new Date(INICIO_MISION + estado.t * 1000);
+
+  // Fecha UTC
+  informacion.fechaUTC = fecha.toISOString()
+    .replace("T", " ")
+    .replace(".000Z", " UTC");
+
+  // Tiempo transcurrido de misión
+  const tiempo = Math.floor(estado.t);
+
+  const dias = Math.floor(tiempo / 86400);
+  const horas = Math.floor((tiempo % 86400) / 3600);
+  const minutos = Math.floor((tiempo % 3600) / 60);
+  const segundos = tiempo % 60;
+
+  informacion.tiempoMision =
+    `T+${String(dias).padStart(2, "0")}:` +
+    `${String(horas).padStart(2, "0")}:` +
+    `${String(minutos).padStart(2, "0")}:` +
+    `${String(segundos).padStart(2, "0")}`;
+
+  // Actualizar el nombre del botón
+  botonPlay.name(
+    estado.reproduciendo ? "Pausar" : "Reproducir"
+  );
+
+}
+```
+
+A esta función la llamamos en el animatiónLoop, que es donde se actualiza también según este reloj la orientación de la tierra en su eje de rotación (puesto a que rota siguiendo este mismo reloj)
+
+```js
+function animationLoop() {
+
+  requestAnimationFrame(animationLoop);
+
+  const delta = reloj.getDelta();
+
+  if (estado.reproduciendo) {
+
+    estado.t += delta * estado.velocidad;
+
+    estado.t = THREE.MathUtils.clamp(
+      estado.t,
+      0,
+      DURACION_MISION
+    );
+
+    // Detener al alcanzar los extremos
+    if (estado.t === 0 || estado.t === DURACION_MISION) {
+      estado.reproduciendo = false;
+    }
+  }
+
+  // Rotación terrestre según el tiempo absoluto
+  tierra.rotation.y =
+    (2 * Math.PI / PERIODO_ROTACION) * estado.t;
+
+  actualizarGUI();
+
+  renderer.render(scene, camera);
+}
+```
+
+El resultado, por ahora, es un reloj manipulable con el que podemos hacer girar la tierra
+
+<img src="./readme_images/reloj.gif" alt="La tierra girando por el reloj" width="100%">
+
+## Incluyendo a la Luna en la simulación
+
+
 
